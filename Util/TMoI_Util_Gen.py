@@ -312,7 +312,7 @@ class Mod:  # TODO: Allow this class to handle missing dependencies / dependents
         version_str      : str = _t(2 , '│') + 'version'      . ljust(ljust_val) + f'= {self.version}'
         uploaded_str     : str = _t(2 , '│') + 'uploaded'     . ljust(ljust_val) + f'= {self.uploaded}'
         last_updated_str : str = _t(2 , '│') + 'last_updated' . ljust(ljust_val) + f'= {self.last_updated}'
-        authors_str      : str = _process_authors_str(authors = self.authors , ljust_val = ljust_val)
+        authors_str      : str = _process_authors_str(pipe = '│' , authors = self.authors , ljust_val = ljust_val)
         description_str  : str = _t(2 , '│') + 'description'  . ljust(ljust_val) + f'= {shorten(self.description, 128)}'
         visibility_str   : str = _t(2 , '│') + 'visibility'   . ljust(ljust_val) + f'= {self.visibility}'
         preview_str      : str = _t(2 , '╰') + 'preview'      . ljust(ljust_val) + f'= {self.preview}'
@@ -321,8 +321,8 @@ class Mod:  # TODO: Allow this class to handle missing dependencies / dependents
         mods_path_str    : str = _t(2 , '│') + 'mods_path'    . ljust(ljust_val) + f'= {self.mods_path.__class__.__qualname__} ({self.mods_path})'
         register_str     : str = _t(2 , '│') + 'register'     . ljust(ljust_val) + f'= {self.register}'
         position_str     : str = _t(2 , '│') + 'position'     . ljust(ljust_val) + f'= {self.position}'
-        dependencies_str : str = _process_deps_str(deps = self.dependencies , ljust_val = ljust_val)
-        dependents_str   : str = _process_deps_str(deps = self.dependents   , ljust_val = ljust_val)
+        dependencies_str : str = _process_deps_str(pipe = '│' , deps = self.dependencies , ljust_val = ljust_val)
+        dependents_str   : str = _process_deps_str(pipe = '╰' , deps = self.dependents   , ljust_val = ljust_val)
 
         # Assemble all property strings and return.
         return  f'{qual_name} ('     + '\n' + \
@@ -413,10 +413,10 @@ def _pad_str_line(line: str, ljust_val: int):
     # Reconstruct the line, with what comes before the equal sign being padded to the appropriate length.
     return f'{before.ljust(ljust_val)}={"".join(after)}'
 
-def _process_authors_str(authors: List[ModAuthor], ljust_val: int) -> str:
+def _process_authors_str(pipe: str, authors: List[ModAuthor], ljust_val: int) -> str:
     """Helper function to process a list of ModAuthors into a human-readable string."""
 
-    return _t(2 , '│') + 'authors'.ljust(ljust_val) + '= [' + (
+    return _t(2 , pipe) + 'authors'.ljust(ljust_val) + '= [' + (
         # If there are no authors we shouldn't place anything between the square brackets.
         '' if len(authors) == 0 else (
             # Move to next line.
@@ -432,10 +432,10 @@ def _process_authors_str(authors: List[ModAuthor], ljust_val: int) -> str:
         )
     ) + ']'
 
-def _process_deps_str(deps: List[Union[Mod, int]], ljust_val: int) -> str:
+def _process_deps_str(deps: List[Union[Mod, int]], ljust_val: int, pipe: str) -> str:
     """Helper function to process a list of Mod and int addon references into a human-readable string."""
 
-    return _t(2 , '│') + 'dependencies'.ljust(ljust_val) + '= [' + (
+    return _t(2 , pipe) + 'dependencies'.ljust(ljust_val) + '= [' + (
         '' if len(deps) == 0 else (
             # Move to next line.
             '\n'
