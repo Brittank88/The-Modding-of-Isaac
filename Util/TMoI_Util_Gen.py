@@ -463,5 +463,4 @@ def _process_deps_str(deps: List[Union[Mod, int]], ljust_val: int) -> str:
 if __name__ == '__main__':
 
     example_mod = Mod(Path('D:\Steam Library\steamapps\common\The Binding of Isaac Rebirth\mods\seinfeld death music_1229025788'))
-
     print(example_mod)
