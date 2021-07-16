@@ -98,14 +98,14 @@ class ModAuthor:
 
     def __str__(self):
 
-        rjust_val : int = 9
+        ljust_val : int = 9
 
         # Calculate all the property strings to display.
         qual_name      : str = self.__class__.__qualname__
         info_title_str : str = _t(1 , '' ) + 'Info:'
-        name_str       : str = _t(2 , '│') + 'name'     . ljust(rjust_val) + f'= {self.name}'
-        url_str        : str = _t(2 , '│') + 'url'      . ljust(rjust_val) + f'= {self.url}'
-        icon_url_str   : str = _t(2 , '╰') + 'icon_url' . ljust(rjust_val) + f'= {self.icon_url}'
+        name_str       : str = _t(2 , '│') + 'name'     . ljust(ljust_val) + f'= {self.name}'
+        url_str        : str = _t(2 , '│') + 'url'      . ljust(ljust_val) + f'= {self.url}'
+        icon_url_str   : str = _t(2 , '╰') + 'icon_url' . ljust(ljust_val) + f'= {self.icon_url}'
 
         return f'{qual_name} (' + '\n' + \
                info_title_str   + '\n' + \
@@ -301,80 +301,28 @@ class Mod:  # TODO: Allow this class to handle missing dependencies / dependents
 
     def __str__(self):
 
-        rjust_val  : int = 15   # Adjustable justification for main equals sign alignment.
+        ljust_val  : int = 17   # Adjustable justification for main equals sign alignment.
 
         # Calculate all the property strings to display.
         qual_name        : str = self.__class__.__qualname__
         meta_title       : str = _t(1 , '' ) + 'Metadata:'
-        name_str         : str = _t(2 , '│') + 'name'         . ljust(rjust_val) + f'= {self.name}'
-        id_str           : str = _t(2 , '│') + 'id'           . ljust(rjust_val) + f'= {self.id}'
-        size_str         : str = _t(2 , '│') + 'size'         . ljust(rjust_val) + f'= {self.size}'
-        version_str      : str = _t(2 , '│') + 'version'      . ljust(rjust_val) + f'= {self.version}'
-        uploaded_str     : str = _t(2 , '│') + 'uploaded'     . ljust(rjust_val) + f'= {self.uploaded}'
-        last_updated_str : str = _t(2 , '│') + 'last_updated' . ljust(rjust_val) + f'= {self.last_updated}'
-        authors_str      : str = _t(2 , '│') + 'authors'      . ljust(rjust_val) +  '= [' + (
-            # If there are no authors we shouldn't place anything between the square brackets.
-            '' if len(self.authors) == 0 else (
-                # Move to next line.
-                '\n'
-                # We'll need to indent each line of each author repr appropriately.
-                + ''.join([_t(2 , '│') + _t(1 , '') + l + '\n' for a in self.authors for l in str(a).split('\n')])
-                # Indent the final bracket, which will be on a new line.
-                + _t(2 , '│')
-            )
-        ) + ']'
-        description_str  : str = _t(2 , '│') + 'description'  . ljust(rjust_val) + f'= {shorten(self.description, 128)}'
-        visibility_str   : str = _t(2 , '│') + 'visibility'   . ljust(rjust_val) + f'= {self.visibility}'
-        preview_str      : str = _t(2 , '╰') + 'preview'      . ljust(rjust_val) + f'= {self.preview}'
+        name_str         : str = _t(2 , '│') + 'name'         . ljust(ljust_val) + f'= {self.name}'
+        id_str           : str = _t(2 , '│') + 'id'           . ljust(ljust_val) + f'= {self.id}'
+        size_str         : str = _t(2 , '│') + 'size'         . ljust(ljust_val) + f'= {self.size}'
+        version_str      : str = _t(2 , '│') + 'version'      . ljust(ljust_val) + f'= {self.version}'
+        uploaded_str     : str = _t(2 , '│') + 'uploaded'     . ljust(ljust_val) + f'= {self.uploaded}'
+        last_updated_str : str = _t(2 , '│') + 'last_updated' . ljust(ljust_val) + f'= {self.last_updated}'
+        authors_str      : str = _process_authors_str(authors = self.authors , ljust_val = ljust_val)
+        description_str  : str = _t(2 , '│') + 'description'  . ljust(ljust_val) + f'= {shorten(self.description, 128)}'
+        visibility_str   : str = _t(2 , '│') + 'visibility'   . ljust(ljust_val) + f'= {self.visibility}'
+        preview_str      : str = _t(2 , '╰') + 'preview'      . ljust(ljust_val) + f'= {self.preview}'
         internal_title   : str = _t(1 , '' ) + 'Internal:'
-        ref_str          : str = _t(2 , '│') + 'ref'          . ljust(rjust_val) + f'= {self.ref.__class__.__qualname__} ({self.ref})'
-        mods_path_str    : str = _t(2 , '│') + 'mods_path'    . ljust(rjust_val) + f'= {self.mods_path.__class__.__qualname__} ({self.mods_path})'
-        register_str     : str = _t(2 , '│') + 'register'     . ljust(rjust_val) + f'= {self.register}'
-        position_str     : str = _t(2 , '│') + 'position'     . ljust(rjust_val) + f'= {self.position}'
-        dependencies_str : str = _t(2 , '│') + 'dependencies' . ljust(rjust_val) +  '= [' + (
-            '' if len(self.dependencies) == 0 else (
-                # Move to next line.
-                '\n'
-                # List each mod in simplest form.
-                + ''.join([
-                    # Correct indentation.
-                    _t(2 , '│') + _t(1 , '')
-                    # Mod's simplest form.
-                    + (
-                        f'{d.__class__.__qualname__} (name = {d.name}, ref = {d.ref}, id = {d.id}, size = {d.size})'
-                        if isinstance(d, Mod) else
-                        f'{d.__class__.__qualname__} ({d})'
-                    )
-                    # Newline for next mod (and for closing square bracket).
-                    + '\n'
-                    for d in self.dependencies
-                ])
-                # Indent the final bracket, which will be on a new line.
-                + _t(2 , '│')
-            )
-        ) + ']'
-        dependents_str   : str = _t(2 , '╰') + 'dependents'   . ljust(rjust_val) +  '= [' + (
-            '' if len(self.dependents) == 0 else (
-                # Move to next line.
-                '\n'
-                # List each mod in simplest form.
-                + ''.join([
-                    # Correct indentation.
-                    _t(2 , '│') + _t(1 , '')
-                    # Mod's simplest form.
-                    + (
-                        f'{d.__class__.__qualname__} (name = {d.name}, ref = {d.ref}, id = {d.id}, size = {d.size})'
-                        if isinstance(d, Mod) else
-                        f'{d.__class__.__qualname__} ({d})'
-                    )
-                    # Newline for next mod (and for closing square bracket).
-                    + '\n'
-                    for d in self.dependents
-                ])
-                # Indent the final bracket, which will be on a new line.
-                + _t(2 , '│')
-            )
-        ) + ']'
+        ref_str          : str = _t(2 , '│') + 'ref'          . ljust(ljust_val) + f'= {self.ref.__class__.__qualname__} ({self.ref})'
+        mods_path_str    : str = _t(2 , '│') + 'mods_path'    . ljust(ljust_val) + f'= {self.mods_path.__class__.__qualname__} ({self.mods_path})'
+        register_str     : str = _t(2 , '│') + 'register'     . ljust(ljust_val) + f'= {self.register}'
+        position_str     : str = _t(2 , '│') + 'position'     . ljust(ljust_val) + f'= {self.position}'
+        dependencies_str : str = _process_deps_str(deps = self.dependencies , ljust_val = ljust_val)
+        dependents_str   : str = _process_deps_str(deps = self.dependents   , ljust_val = ljust_val)
 
         # Assemble all property strings and return.
         return  f'{qual_name} ('     + '\n' + \
@@ -441,12 +389,79 @@ def parse_steam_datetime(steam_datetime: str) -> datetime:
 
 # Helper function to produce a string of <n> tabs of <tab_width> width,
 # with <c> inserted such that there is a single whitespace between it and the end of the string.
-def _t(n: int, c: str) -> str: return (n * REPR_TAB_WIDTH * ' ')[:-REPR_TAB_WIDTH] + c + ' ' * (REPR_TAB_WIDTH - len(c))
+def _t(n: int, c: str) -> str:
+    """Helper function to produce a string of <n> tabs of <tab_width> width.
+
+    The parameter <c> inserted such that there is a single whitespace between it and the end of the string.
+    """
+
+    return (n * REPR_TAB_WIDTH * ' ')[:-REPR_TAB_WIDTH] + c + ' ' * (REPR_TAB_WIDTH - len(c))
+
+def _process_authors_str(authors: List[ModAuthor], ljust_val: int) -> str:
+    """Helper function to process a list of ModAuthors into a human-readable string."""
+
+    def _pad_author_line(line: str, ljust_val: int):
+        """Takes a completed author str line and pads the equal sign to the target position."""
+
+        # if there are no equals signs we have nothing to align.
+        if '=' not in line: return line
+
+        # Split the line up into what comes before and after the equal sign (accounting for the possibility of multiple equal signs).
+        before, *after = line.split('=')
+
+        # We only want from the label forward.
+        #if   (pipe := '│') in before : tab , *before = before.split('│')
+        #elif (pipe := '╰') in before : tab , *before = before.split('╰')
+
+        # Reconstruct the line, with what comes before the equal sign being padded to the appropriate length.
+        return f'{before.ljust(ljust_val)}={"".join(after)}'
+
+    return _t(2 , '│') + 'authors'.ljust(ljust_val) + '= [' + (
+        # If there are no authors we shouldn't place anything between the square brackets.
+        '' if len(authors) == 0 else (
+            # Move to next line.
+            '\n'
+            # We'll need to indent each line of each author repr appropriately.
+            + ''.join([
+                _t(2 , '│') + _pad_author_line(line = _t(1 , '') + l + '\n', ljust_val = ljust_val)
+                for a in authors
+                for l in str(a).split('\n')
+            ])
+            # Indent the final bracket, which will be on a new line.
+            + _t(2 , '│')
+        )
+    ) + ']'
+
+def _process_deps_str(deps: List[Union[Mod, int]], ljust_val: int) -> str:
+    """Helper function to process a list of Mod and int addon references into a human-readable string."""
+
+    return _t(2 , '│') + 'dependencies'.ljust(ljust_val) + '= [' + (
+        '' if len(deps) == 0 else (
+            # Move to next line.
+            '\n'
+            # List each mod in simplest form.
+            + ''.join([
+                # Correct indentation.
+                _t(2 , '│') + _t(1 , '')
+                # Mod's simplest form.
+                + (
+                    f'{d.__class__.__qualname__} (name = {d.name}, ref = {d.ref}, id = {d.id}, size = {d.size})'
+                    if isinstance(d, Mod) else
+                    f'{d.__class__.__qualname__} ({d})'
+                )
+                # Newline for next mod (and for closing square bracket).
+                + '\n'
+                for d in deps
+            ])
+            # Indent the final bracket, which will be on a new line.
+            + _t(2 , '│')
+        )
+    ) + ']'
 
 ### TESTING ###
 
 if __name__ == '__main__':
 
-    example_mod = Mod(Path('D:\Steam Library\steamapps\common\The Binding of Isaac Rebirth\mods\swallowed-sight_2298334317'))
+    example_mod = Mod(Path('D:\Steam Library\steamapps\common\The Binding of Isaac Rebirth\mods\seinfeld death music_1229025788'))
 
     print(example_mod)
