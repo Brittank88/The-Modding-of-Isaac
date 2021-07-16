@@ -1,0 +1,323 @@
+from __future__ import annotations
+
+from PySide6.QtWidgets import QWidget                                                                       # Standard widgets.
+from PySide6.QtGui import QBrush, QColor, QHideEvent, QPainter, QPen, QPaintEvent, QResizeEvent, QShowEvent # Standard GUI classes.
+from PySide6.QtCore import QSize, Qt, QLineF, QObject, QPoint, QThread, Signal, QRunnable, Slot             # Standard core classes.
+
+from typing import Optional
+from numpy.random import randint
+
+from poisson_disc import Bridson_sampling, hypersphere_surface_sample
+from numpy import array as nparray, ndarray
+
+###//### QCommunicatingParticlesWidget ###//###
+
+# Particle Class
+class _Particle(QObject):
+    """Represents a singular particle with a velocity, scale and style attributes."""
+
+    def __init__(
+        self              ,
+        position : QPoint ,
+        scale    : float  ,
+        velocity : QPoint ,
+        pen      : QPen   ,
+        brush    : QBrush
+    ) -> None:
+        super().__init__()
+
+        ### PHYSICAL ###
+        self.position : QPoint = position
+        self.scale    : float  = scale
+        self.velocity : QPoint = velocity
+
+        ### COSMETIC ###
+        self.pen      : QPen   = pen
+        self.brush    : QBrush = brush
+
+# Line Class
+class _Line(QLineF):
+    """Represents a single line between two particles, with style attributes."""
+
+    def __init__(
+        self         ,
+        pt1 : QPoint ,
+        pt2 : QPoint ,
+        pen : QPen
+    ) -> None:
+
+        ### PHYSICAL ###
+        super().__init__(pt1, pt2)
+
+        ### COSMETIC ###
+        self.pen : QPen = pen
+
+# Calculate Particles / Lines (Use With QThread)
+class _ParticleDrawWorker(QRunnable, QObject):
+    """Calculates particles / lines. Intended to be used with QThread."""
+
+    ### SIGNALS ####
+    draw_ready = Signal(tuple[list[_Particle], list[_Line]])    # Signal returns all point and line data required to paint.
+
+    ### MAIN ###
+    def __init__(
+        self                     ,
+        sim_interval   : float   ,
+        dim_x          : int     ,
+        dim_y          : int     ,
+        scale_min      : float   ,
+        scale_max      : float   ,
+        comm_radius    : float   ,
+        particle_pen   : QPen    ,
+        particle_brush : QBrush  ,
+        line_pen       : QColor 
+    ) -> None:
+        QObject.__init__(self)
+        QRunnable.__init__(self)
+
+        ### LOOP ###
+        self._sim_interval = sim_interval
+        self._is_alive = True
+
+        ### SURFACE ###
+        # Particle surface dimensions.
+        self._dim_x : int = dim_x
+        self._dim_y : int = dim_y
+
+        ### PARTICLES ###
+        self._scale_min      : float           = scale_min      # Minimum particle scale.
+        self._scale_max      : float           = scale_max      # Maximum particle scale.
+        self._particle_pen   : QPen            = particle_pen   # Particle pen.
+        self._particle_brush : QBrush          = particle_brush # Particle brush.
+        self._particle_data  : list(_Particle) = []             # Current point data.
+
+        ### LINES ###
+        self._line_pen    : QPen        = line_pen                                                              # Line pen.
+        self._comm_radius : float       = comm_radius if comm_radius else max(self._dim_x, self._dim_y) / 10    # Communication radius for drawing lines between points.
+        self._line_data   : list(_Line) = []                                                                    # Current line data.
+
+    @Slot(QSize)
+    def update_dims(self, dims: QSize) -> None:
+        """Updates particle surface dimensions when a signal is received."""
+
+        print(dims)
+
+        # Update surface x and y.
+        self._dim_x : int = dims.width()
+        self._dim_y : int = dims.height()
+
+    def run(self) -> None:
+        """Calculates required information each timestep to draw the particles with lines in between them.
+
+        On first call, generates an initial set of points (and lines connecting them) across a given surface.
+        This is accomplished via improved Bridston sampling (an implementation of Poisson Disc sampling).
+
+        On subsequent calls, uses current particle data to determine future particle data.
+        """
+
+        ### INNER FUNCTIONS ###
+        def _communicate_points(particles: list(_Particle)) -> list(_Line):
+            """Calculates communication line data for a given set of particles. Called once per draw call."""
+
+            line_data : list(_Line) = []
+
+            # Calculate lines between all distinct pairs of particles within communication range of each other.
+            already_communicated = {ndarray:[]} # Point pairs to NOT calculate a line between.
+            for particle_styled in particles:
+
+                for particle_styled_other in particles:
+
+                    # Get both particles.
+                    particle, particle_other = particle_styled[0], particle_styled_other[0]
+
+                    # Skip if both points are actually the same point, or we've calculated this connection before.
+                    if particle == particle_other or particle in already_communicated[particle_other]: continue
+
+                    # Calculate distance between the pair.
+                    distance = QPoint(particle_other.position - particle.position).manhattanLength()
+
+                    # Calculate opacity of line connection from distance and draw line if visible.
+                    if (opacity := 1 - distance / self._comm_radius) > 0:
+
+                        # Add the line to our list, with a QPen describing the width of the line from the calculated opacity.
+                        line_data.append((_Line(particle.position, particle_other.position, QPen(self._line_pen, width=opacity))))
+
+                        # Note down the pairing we just calculated the line for, so we don't recalculate it.
+                        # In any future 'repeat', what was once our 'row' variable will be our 'row_other' variable, and vice-versa.
+                        already_communicated[particle].append(particle_other)
+
+            return line_data
+
+        ### CODE ###
+        # Main loop.
+        while self._is_alive:
+
+            # Sleep for the interval.
+            self.thread().sleep(self._sim_interval)
+
+            #print(nparray([self._dim_x, self._dim_y]))
+
+            # If we're on our first call.
+            if not self._particle_data:
+
+                # Protect against dimensions of incorrect value.
+                if self._dim_x <= 0 or self._dim_y <= 0: continue
+
+                # Should be guaranteed by empty particle data, but just in case...
+                self._line_data : list(_Line) = []
+
+                # Calculate initial points via improved Bridson sampling.
+                points_surf: ndarray = Bridson_sampling(nparray([self._dim_x, self._dim_y]), hypersphere_sample = hypersphere_surface_sample)
+
+                # Geenrate particles from sampled points.
+                self._particle_data = [
+                    _Particle(
+                        QPoint(*point)                            ,
+                        randint(self._scale_min, self._scale_max) ,
+                        QPoint(0,0)                               ,
+                        self._particle_pen                        ,
+                        self._particle_brush
+                    ) for point in points_surf
+                ]
+
+                # Calculate line data from point data.
+                self._line_data = _communicate_points(self._particle_data)
+
+            # If we're on a subsequent call.
+            else:
+
+                # For each particle, use its velocity attribute to move its position.
+                for particle_styled in self._particle_data:
+
+                    # Move the particle by its velocity.
+                    particle_styled[0].position += particle_styled[0].velocity
+
+                    # Invert velocity component if it pushed the particle out of bounds along that component axis.
+                    particle_styled[0].velocity *= QPoint(
+                        -1 if particle_styled[0].velocity.x() <= 0 or particle_styled[0].velocity.x() >= self._dim_x else 1,
+                        -1 if particle_styled[0].velocity.y() <= 0 or particle_styled[0].velocity.y() >= self._dim_y else 1
+                    )
+
+                # Recalculate line data from point data.
+                self._line_data = _communicate_points(self._particle_data)
+
+            # Emit new data.
+            self.draw_ready.emit(self._particle_data, self._line_data)
+
+class QCommunicatingParticlesWidget(QWidget):
+
+    ### SIGNALS ###
+    graceful_quit_thread = Signal()
+    quit_thread = Signal()
+    update_worker_dims = Signal(QSize)
+
+    ### MAIN ###
+    def __init__(
+        self                                                              ,
+        parent         : QWidget                                          ,
+        window_flags   : Optional[Qt.WindowFlags] = Qt.Window             ,
+        sim_interval   : Optional[float]  = 0.0025                        ,
+        dim_x          : Optional[int]    = 0                             , # Updated on resizeEvent to be correct.
+        dim_y          : Optional[int]    = 0                             , # Updated on resizeEvent to be correct.
+        scale_min      : Optional[float]  = 1                             ,
+        scale_max      : Optional[float]  = 1                             ,
+        comm_radius    : Optional[float]  = None                          ,
+        particle_pen   : Optional[QPen]   = QPen(QColor(255, 255, 255))   ,
+        particle_brush : Optional[QBrush] = QBrush(QColor(255, 255, 255)) ,
+        line_pen       : Optional[QColor] = QPen(QColor(255, 255, 255))
+    ) -> None:
+        super().__init__(parent, window_flags)
+
+        ### PARTICLE / LINE DATA ###
+        self._particle_data : list(_Particle) = []
+        self._line_data     : list(_Line)     = []
+
+        ### PARTICLE / LINE WORKER ###
+        self._worker = _ParticleDrawWorker(             # Create ParticleDrawWorker instance.
+            sim_interval   ,
+            dim_x          ,
+            dim_y          ,
+            scale_min      ,
+            scale_max      ,
+            comm_radius    ,
+            particle_pen   ,
+            particle_brush ,
+            line_pen
+        )
+        self._worker_thread = QThread(self)                             # Create an alternate thread to run the worker on.
+        self._worker.moveToThread(self._worker_thread)                  # Move the ParticleDrawWorker instance to the new thread.
+        self._worker_thread.started.connect(self._worker.run)           # Worker should run when thread is started.
+        self._worker.draw_ready.connect(self._draw_new_data)            # Whenever new data is ready to be drawn, set the new data and call update to paint it.
+
+        self.quit_thread.connect(self._worker_thread.quit)              # Instruct the thread to quit on signal.
+        self.graceful_quit_thread.connect(self._graceful_stop_thread)   # When a signal is emitted, we will quit the thread and wait for it to finish quitting.
+
+        self.update_worker_dims.connect(self._worker.update_dims)   # When our dimensions update, we want to update those values in the worker too.
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """We also need to update the particle surface dimensions on resize."""
+
+        #print(event.size())
+
+        # Update particle surface dimensions on resize.
+        self.update_worker_dims.emit(event.size())
+
+        # Continue with resize.
+        return super().resizeEvent(event)
+
+    @Slot(object)
+    def _draw_new_data(self, new_data: tuple[list[_Particle], list[_Line]]) -> None:
+        """Updates the stored particle system data and calls update to force a new draw."""
+
+        print(f'Drawing new data:\n{new_data}')
+
+        self._particle_data, self._line_data = new_data # Update data within widget.
+        self.update()                                   # Have new data painted.
+
+    @Slot()
+    def _graceful_stop_thread(self):
+        """Stops the worker and then waits for the thread to naturally close."""
+        
+        self._worker._is_alive = False
+        self.quit_thread.emit()             # Instruct thread to quit.
+        self._worker_thread.wait()          # Wait for the thread to quit.
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """When the widget is being hidden or the application is closing, we should quit the worker thread."""
+
+        self.graceful_quit_thread.emit()    # Emit signal to stop worker thread.
+        return super().hideEvent(event)     # Hide the widget.
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """When this widget is shown, we want to start the worker thread."""
+
+        self._worker_thread.start()     # Start the worker thread.
+        return super().showEvent(event) # Show the widget.
+
+    def _draw_particles(self, painter: QPainter):
+        """Submethod to draw all given particles using a provided painter instance."""
+
+        # Draw all particles.
+        for particle_styled in self._particle_data:
+
+            painter.setPen(particle_styled.pen)                                                         # Set pen to particle pen style.
+            painter.setBrush(particle_styled.brush)                                                     # Set pen to particle brush style.
+            painter.drawEllipse(particle_styled.position, particle_styled.scale, particle_styled.scale) # Draw the particle as a circle (ellipse).
+
+    def _draw_lines(self, painter: QPainter):
+        """Submethod to draw all given particles using a provided painter instance."""
+
+        # Draw all lines.
+        for line_styled in self._line_data:
+
+            painter.setPen(line_styled.pen) # Set pen to line pen style.
+            painter.drawLine(line_styled)   # Draw line.
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Paints the particle system data onto the widget."""
+
+        # Instantiate a painter.
+        painter = QPainter(self)
+
+        self._draw_particles(painter)
+        self._draw_lines(painter)
