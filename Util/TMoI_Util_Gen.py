@@ -397,24 +397,24 @@ def _t(n: int, c: str) -> str:
 
     return (n * REPR_TAB_WIDTH * ' ')[:-REPR_TAB_WIDTH] + c + ' ' * (REPR_TAB_WIDTH - len(c))
 
+def _pad_str_line(line: str, ljust_val: int):
+    """Takes a completed str line and pads the equal sign to the target position."""
+
+    # if there are no equals signs we have nothing to align.
+    if '=' not in line: return line
+
+    # Split the line up into what comes before and after the equal sign (accounting for the possibility of multiple equal signs).
+    before, *after = line.split('=')
+
+    # We only want from the label forward.
+    #if   (pipe := '│') in before : tab , *before = before.split('│')
+    #elif (pipe := '╰') in before : tab , *before = before.split('╰')
+
+    # Reconstruct the line, with what comes before the equal sign being padded to the appropriate length.
+    return f'{before.ljust(ljust_val)}={"".join(after)}'
+
 def _process_authors_str(authors: List[ModAuthor], ljust_val: int) -> str:
     """Helper function to process a list of ModAuthors into a human-readable string."""
-
-    def _pad_author_line(line: str, ljust_val: int):
-        """Takes a completed author str line and pads the equal sign to the target position."""
-
-        # if there are no equals signs we have nothing to align.
-        if '=' not in line: return line
-
-        # Split the line up into what comes before and after the equal sign (accounting for the possibility of multiple equal signs).
-        before, *after = line.split('=')
-
-        # We only want from the label forward.
-        #if   (pipe := '│') in before : tab , *before = before.split('│')
-        #elif (pipe := '╰') in before : tab , *before = before.split('╰')
-
-        # Reconstruct the line, with what comes before the equal sign being padded to the appropriate length.
-        return f'{before.ljust(ljust_val)}={"".join(after)}'
 
     return _t(2 , '│') + 'authors'.ljust(ljust_val) + '= [' + (
         # If there are no authors we shouldn't place anything between the square brackets.
@@ -423,7 +423,7 @@ def _process_authors_str(authors: List[ModAuthor], ljust_val: int) -> str:
             '\n'
             # We'll need to indent each line of each author repr appropriately.
             + ''.join([
-                _t(2 , '│') + _pad_author_line(line = _t(1 , '') + l + '\n', ljust_val = ljust_val)
+                _t(2 , '│') + _pad_str_line(line = _t(1 , '') + l + '\n', ljust_val = ljust_val)
                 for a in authors
                 for l in str(a).split('\n')
             ])
