@@ -1,4 +1,5 @@
 ### IMPORTS ###
+# region IMPORTS
 
 from typing import Iterator, List, Tuple, Union
 from pathlib2 import Path
@@ -6,7 +7,10 @@ from winreg import OpenKeyEx, QueryValueEx, HKEY_CLASSES_ROOT, KEY_READ
 from json import loads
 from re import search
 
+# endregion
+
 ### CODE ###
+# region CODE
 
 def find_steam_location() -> Union[Path, None]:
     """Determines the location of Steam on the target system by extracting it from Steam's URL protocol registry keys.
@@ -92,10 +96,15 @@ def find_boi_data_folders() -> Union[Tuple[Path, Path], None]:
     # If we succeeded we'll package the path objects into a dictionary and return it.
     else: return save_path, mods_path
 
+# endregion
+
 ### TESTING ###
+# region TESTING
 
 if __name__ == '__main__':
 
     print(f'Steam.exe location  : {find_steam_location()}'             )
     print(f'Steam library paths : {list(find_steam_library_folders())}')
     print(f'BoI data paths      : {find_boi_data_folders()}'           )
+
+# endregion
