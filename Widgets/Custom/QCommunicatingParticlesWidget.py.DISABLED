@@ -142,7 +142,7 @@ class _ParticleDrawWorker(QRunnable, QObject):
                         # Add the line to our list, with a QPen describing the width of the line from the calculated opacity.
                         line_data.append((_Line(particle.position, particle_other.position, QPen(self._line_pen, width=opacity))))
 
-                        # Note down the pairing we just calculated the line for, so we don't recalculate it.
+                        # Record the pairing we just calculated the line for, so we don't recalculate it.
                         # In any future 'repeat', what was once our 'row' variable will be our 'row_other' variable, and vice-versa.
                         already_communicated[particle].append(particle_other)
 

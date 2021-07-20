@@ -1,7 +1,6 @@
 ### IMPORTS ###
 
-from TMoI_Util_Gen import IsaacVer, DataPathType
-from typing import Dict, Iterator, List, Union
+from typing import Iterator, List, Tuple, Union
 from pathlib2 import Path
 from winreg import OpenKeyEx, QueryValueEx, HKEY_CLASSES_ROOT, KEY_READ
 from json import loads
@@ -47,13 +46,13 @@ def find_steam_library_folders() -> Union[Iterator[Path], None]:
     vdf_json = loads(vdf_path.read_text().replace('"LibraryFolders"', '').strip(' \n').replace('\t\t', ':').replace('"\n', '",\n').replace(',\n}', '\n}'))
 
     # Filter the libraries out of the JSON  and return them (alongside the default path).
-    # Note that there are a maximum of 7 Steam library paths, hence '1234567'.
+    # Note: There are a maximum of 7 Steam library paths, hence '1234567'.
     libraries_list = [Path(vdf_json[key]) / 'steamapps' for key in vdf_json.keys() if str(key) in '1234567'] + default_lib_path
 
     # Return a generator for the list of library path objects.
     return (l for l in libraries_list)
 
-def find_boi_data_folders() -> Union[Dict[DataPathType, Path], None]:
+def find_boi_data_folders() -> Union[Tuple[Path, Path], None]:
     """Determines the location of BoI's save data and mod folders, via 'savedatapath.txt'.
     
     Will return:
@@ -91,18 +90,7 @@ def find_boi_data_folders() -> Union[Dict[DataPathType, Path], None]:
     # Return None if extraction failed.
     except AttributeError: return None
     # If we succeeded we'll package the path objects into a dictionary and return it.
-    else: return {
-        DataPathType.SAVE : save_path,
-        DataPathType.MODS : mods_path
-    }
-
-def get_game_version() -> Union[IsaacVer, None]:
-    """Determines the game edition via the save data path the game uses."""
-
-    save_path = str(find_boi_data_folders()[DataPathType.SAVE])
-    if   'Repentance'  in save_path : return IsaacVer.REP
-    elif 'Afterbirth+' in save_path : return IsaacVer.ABP
-    else                            : return None
+    else: return save_path, mods_path
 
 ### TESTING ###
 
@@ -111,4 +99,3 @@ if __name__ == '__main__':
     print(f'Steam.exe location  : {find_steam_location()}'             )
     print(f'Steam library paths : {list(find_steam_library_folders())}')
     print(f'BoI data paths      : {find_boi_data_folders()}'           )
-    print(f'BoI game version    : {get_game_version()}'                )

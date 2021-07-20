@@ -9,6 +9,7 @@ requests = "*"
 pathlib2 = "*"
 lxml = "*"
 cssselect = "*"
+loguru = "*"
 
 [dev-packages]
 
