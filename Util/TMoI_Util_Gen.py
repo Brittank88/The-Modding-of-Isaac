@@ -4,8 +4,12 @@
 #=# Allow Self-Annotations #=#
 from __future__ import annotations
 
-#=# Logger #=#
+#=# Logging / Console #=#
 from loguru import logger
+from loguru._defaults import LOGURU_INFO_NO, LOGURU_ERROR_NO
+from tqdm.auto import tqdm
+logger.remove()
+logger.add(lambda msg: tqdm.write(msg, end = ''), colorize = True, level = LOGURU_INFO_NO)
 
 #=# Platform-Specific #=#
 from platform import system
@@ -22,6 +26,7 @@ from typing import Generator, List, Tuple, Union
 
 #=# HTTP Requesting / Parsing #=#
 from requests import get
+from requests.status_codes import codes as request_codes
 from requests.models import HTTPError, Response
 from urllib.parse import urlparse, parse_qs
 from time import sleep
@@ -127,7 +132,7 @@ class ModAuthor:
                icon_url_str     + '\n' + \
                ')'
 
-@logger.catch(exception = ModInstanceCreationError, level = 40, reraise = True)
+@logger.catch(exception = ModInstanceCreationError, level = LOGURU_ERROR_NO, reraise = True)
 @dataclass
 class Mod:
 
@@ -268,55 +273,73 @@ class Mod:
 
                 logger.bind(attempt = retry_attempts).debug(f'Requesting HTML from "{addon_url}".')
 
-                # We will begin by requesting the page data.
-                addon_page            : Response = get(addon_url)
-                try                   :
-                    if addon_page.raise_for_status() is None: break
-                except HTTPError as e :
+                # We will begin by requesting the page data and getting the response code.
+                addon_page  : Response = get(addon_url)
+                page_status : int = addon_page.status_code
 
-                    # 429 means we were rate-limited and should try again after an appropriate delay.
-                    if e.response.status_code == 429:
+                # Break if we successfully retrieved the page HTML.
+                if   page_status == request_codes.OK: break
 
-                        logger.bind(attempt = retry_attempts).warning(
-                            f'Status code "{e.response.status_code}" indicates that we encountered a rate limit. Checking for a Retry-After header...'
-                        )
+                # Break and abort scrape if page was not found.
+                elif page_status == request_codes.NOT_FOUND:
 
-                        retry_delay : int = DEFAULT_RETRY_TIME
-                        if (retry_after_header := e.response.headers.get('Retry-After')) is not None:
+                    logger.bind(attempt = retry_attempts, response_code = page_status).trace(f'Encountered "{request_codes.NOT_FOUND}".')
+                    logger                                                           \
+                        .bind(attempt = retry_attempts, response_code = page_status) \
+                        .warning(f'Addon page @ "{addon_url}" is nonexistent - maybe it was removed? Aborting scrape.')
 
-                            logger.bind(attempt = retry_attempts).success('Retry-After header found! Extracting retry delay time...')
+                    self.workshop_ok = False
+                    break
 
-                            try               : retry_delay = int(retry_after_header)
-                            except ValueError : retry_delay = (datetime.strptime(retry_after_header, '%a, %d %b %Y %H:%M:%S %Z') - datetime.now()).second
+                # Delay and retry if we encountered rate-limiting.
+                elif page_status == request_codes.TOO_MANY:
 
-                            logger.bind(attempt = retry_attempts).success(f'Retry delay time of {retry_delay} seconds extracted!')
+                    logger.bind(attempt = retry_attempts, response_code = page_status).trace(f'Encountered "{request_codes.TOO_MANY}".')
+                    logger                                                           \
+                        .bind(attempt = retry_attempts, response_code = page_status) \
+                        .warning('Request prevented by rate-limiting. Checking for Retry-After header...')
 
-                        else: logger.bind(attempt = retry_attempts).warning(f'No Retry-After header found - waiting {DEFAULT_RETRY_TIME} seconds to retry...')
+                    # Attempt to find Retry-After header and extract delay time from it.
+                    retry_delay                                                                  : int = DEFAULT_RETRY_TIME
+                    if (retry_after_header := addon_page.headers.get('Retry-After')) is not None :
 
-                        # Sleep until next attempt.
-                        sleep(retry_delay)
+                        logger                                                           \
+                            .bind(attempt = retry_attempts, response_code = page_status) \
+                            .success('Retry-After header found! Extracting retry delay time...')
 
-                        # Increment retry count.
-                        retry_attempts += 1
+                        # Parse and extract delay time from Retry-After header.
+                        try               : retry_delay = int(retry_after_header)
+                        except ValueError : retry_delay = (datetime.strptime(retry_after_header, '%a, %d %b %Y %H:%M:%S %Z') - datetime.now()).second
 
-                    # 404 means the addon page doesn't even exist.
-                    elif e.response.status_code == 404:
-                        logger.bind(attempt = retry_attempts).warning(
-                            f'Status code "{e.response.status_code}" indicates addon page @ "{addon_url}" is nonexistent. Maybe it was removed?'
-                        )
-                        break
+                        logger                                                           \
+                            .bind(attempt = retry_attempts, response_code = page_status) \
+                            .success(f'Retry delay time of {retry_delay} seconds extracted!')
 
-                    # Something other than 404 means the page exists, but we still failed to retrieve the HTML.
+                    # If there is no Retry-After header, warn and retry after a default time period.
                     else:
-                        logger.bind(attempt = retry_attempts).warning(
-                            f'Status code "{e.response.status_code}" indicates failure to retrieve HTML of "{addon_url}". Retrying after {DEFAULT_RETRY_TIME} seconds...'
-                        )
-                        
-                        # Sleep until next attempt.
-                        sleep(DEFAULT_RETRY_TIME)
+                        logger                                                           \
+                            .bind(attempt = retry_attempts, response_code = page_status) \
+                            .warning(f'No Retry-After header found - waiting {DEFAULT_RETRY_TIME} seconds to retry...')
 
-                        # Increment retry count.
-                        retry_attempts += 1
+                    # Sleep until next attempt.
+                    sleep(retry_delay)
+
+                    # Increment retry count.
+                    retry_attempts += 1
+
+                # Retry after default delay time for any other error.
+                else:
+
+                    logger.bind(attempt = retry_attempts, response_code = page_status).trace(f'Encountered "{page_status}".')
+                    logger                                                           \
+                        .bind(attempt = retry_attempts, response_code = page_status) \
+                        .warning(f'Miscellaneous failure to retrieve HTML of "{addon_url}". Retrying after {DEFAULT_RETRY_TIME} seconds...')
+                    
+                    # Sleep until next attempt.
+                    sleep(DEFAULT_RETRY_TIME)
+
+                    # Increment retry count.
+                    retry_attempts += 1
 
             # Error if we were unable to retrieve the addon page HTML.
             if retry_attempts > MAX_REQUEST_RETRIES:
@@ -410,7 +433,7 @@ class Mod:
 
                     else: logger.warning(f'Cannot create link (Mod @ {self.ref} <=> Mod @ {item_ref}).')
 
-                if (dep_count := len(self.dependencies)) > 0: logger.success(f'Successfully extracted {dep_count} dependencies!')
+                if (dep_count := len(self.dependencies)) > 0: logger.success(f'Successfully extracted {dep_count} dependenc{"ies" if dep_count > 1 else "y"}!')
                 else                                        : logger.info   ('Mod has no dependencies.')
 
                 logger.info('Attempting extraction of authors...')
@@ -428,8 +451,8 @@ class Mod:
                             CSSSelector('div.creatorsBlock>div.friendBlock>div.playerAvatar>img'    )(addon_html)
                         )
                     ]
-                except IndexError: logger.warning(f'Failed to extract authors for (Mod @ "{self.ref}").')
-                else             : logger.success(f'Successfully extracted {len(self.authors)} authors!')
+                except IndexError : logger.warning(f'Failed to extract authors for (Mod @ "{self.ref}").')
+                else              : logger.success(f'Successfully extracted {len(self.authors)} author{"s" if len(self.authors) > 1 else ""}!')
 
             else: logger.warning(f'Scraping from "{addon_url}" HTML must be aborted.')
 
@@ -529,9 +552,12 @@ class ModFactory:
     ) -> List[Mod]:
         """Attempts to build a list of mods given a list of refs that are either local folders or addon IDs."""
 
+        # Whilst we can accept generators, we need the refs as a list anyway.
+        if isinstance(refs, Generator): refs = [r for r in refs]
+
         # Attempt to build each ref and append it to this list.
         ret : List[Union[Mod, Union[int, Path]]] = []
-        for ref in refs:
+        for ref in tqdm(refs, total = len(refs), unit = 'mod'):
 
             # Attempt to build - if we failed, skip the ref.
             try                                    : ret.append(ModFactory.__build_singular(ref = ref, mods_path = mods_path))
