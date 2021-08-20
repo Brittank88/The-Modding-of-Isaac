@@ -471,7 +471,7 @@ class Mod:
 
     def __str__(self):
 
-        ljust_val  : int = 17   # Adjustable justification for main equals sign alignment.
+        ljust_val : int = 17    # Adjustable justification for main equals sign alignment.
 
         # Calculate all the property strings to display.
         qual_name        : str = self.__class__.__qualname__
@@ -724,7 +724,7 @@ if __name__ == '__main__':
     mods_path : Path = TMoI_Util.find_boi_data_folders()[1]
 
     parsed_mods = list(filter(None, ModFactory.build(mods_path.iterdir(), mods_path)))
-    print(f'Parsed mods: {len(parsed_mods)}')
-    for i, m in enumerate(parsed_mods): print(f'#{i} | Name: {m.name}; ID: {m.id}')
+    print(f'{len(parsed_mods)} parsed mods:')
+    for i, m in enumerate(parsed_mods): print(f'\t#{i + 1} | Name: {m.name}; ID: {m.id}')
 
 # endregion

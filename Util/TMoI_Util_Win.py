@@ -1,9 +1,10 @@
 ### IMPORTS ###
 # region IMPORTS
 
+from json.decoder import JSONDecoder
 from typing import Iterator, List, Tuple, Union
 from pathlib2 import Path
-from winreg import OpenKeyEx, QueryValueEx, HKEY_CLASSES_ROOT, KEY_READ
+from winreg import OpenKeyEx, QueryValueEx, HKEY_CURRENT_USER, KEY_READ
 from json import loads
 from re import search
 
@@ -13,7 +14,7 @@ from re import search
 # region CODE
 
 def find_steam_location() -> Union[Path, None]:
-    """Determines the location of Steam on the target system by extracting it from Steam's URL protocol registry keys.
+    """Determines the location of Steam on the target system by extracting it from the registry.
     
     Will return:
         - A Path object targeting the Steam executable.
@@ -21,8 +22,8 @@ def find_steam_location() -> Union[Path, None]:
     """
 
     try:
-        with OpenKeyEx(HKEY_CLASSES_ROOT, 'steam\\Shell\\Open\\Command', 0, KEY_READ) as steam_key:
-            return Path(QueryValueEx(steam_key, '')[0].split(' -- ')[0].replace('"', ''))
+        with OpenKeyEx(HKEY_CURRENT_USER, 'SOFTWARE\\Valve\\Steam', 0, KEY_READ) as steam_key:
+            return Path(QueryValueEx(steam_key, 'SteamPath')[0])
     except FileNotFoundError: return None
 
 def find_steam_library_folders() -> Union[Iterator[Path], None]:
